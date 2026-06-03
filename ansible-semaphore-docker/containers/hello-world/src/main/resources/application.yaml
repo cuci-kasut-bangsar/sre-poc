@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: hello-world
+
+server:
+  port: 8080
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    # Tell this instance NOT to register itself as a client
+    register-with-eureka: true
+    # Tell it not to cache registry information locally
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/

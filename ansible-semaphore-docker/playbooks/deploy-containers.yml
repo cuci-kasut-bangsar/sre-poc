@@ -1,0 +1,125 @@
+---
+- hosts: localhost
+  gather_facts: no
+  tasks:
+
+    # ----------------------------------------------------
+    # STEP 1: CREATE DOCKER NETWORK WITH CUSTOM SUBNET
+    # ----------------------------------------------------
+    - name: Create custom internal Docker network
+      community.docker.docker_network:
+        name: "{{ NETWORK_NAME }}"
+        ipam_config:
+          - subnet: "{{ SUBNET }}"
+            gateway: 192.168.1.254
+
+    # ----------------------------------------------------
+    # STEP 2: CACHE LAYER (REDIS)
+    # ----------------------------------------------------
+    - name: Deploy Redis Cache Container
+      community.docker.docker_container:
+        name: cache-redis
+        image: redis:7.0-alpine
+        state: started
+        restart_policy: always
+        networks:
+          - name: "{{ NETWORK_NAME }}"
+            ipv4_address: "{{ IP_REDIS }}"
+        published_ports:
+          - "6379:6379"
+        command: redis-server --appendonly yes
+
+    # ----------------------------------------------------
+    # STEP 3: API GATEWAYS & EUREKA (192.168.1.2 & .3)
+    # ----------------------------------------------------
+    - name: Build Spring Cloud Gateway Image Locally
+      community.docker.docker_image:
+        name: local/spring-cloud-gateway
+        tag: latest
+        build:
+          path: /src/gateway
+        source: build  
+
+    - name: Deploy Spring Cloud Gateway 1
+      community.docker.docker_container:
+        name: api-gateway-1
+        image: local/spring-cloud-gateway:latest
+        pull: no  # Uses the image we just built above
+        state: started
+        restart_policy: always
+        networks:
+          - name: "{{ NETWORK_NAME }}"
+            ipv4_address: "{{ IP_GATEWAY_1 }}"
+        published_ports:
+          - "8080:8080"   # Gateway Port
+          - "8761:8761"   # Eureka Dashboard Port
+        env:
+          SPRING_PROFILES_ACTIVE: prod
+          EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://{{ IP_GATEWAY_1 }}:8761/eureka/,http://{{ IP_GATEWAY_2 }}:8761/eureka/"
+
+    - name: Deploy Spring Cloud Gateway 2
+      community.docker.docker_container:
+        name: api-gateway-2
+        image: local/spring-cloud-gateway:latest
+        pull: no  # Uses the image we just built above
+        networks:
+          - name: "{{ NETWORK_NAME }}"
+            ipv4_address: "{{ IP_GATEWAY_2 }}"
+        published_ports:
+          - "8081:8080"
+          - "8762:8761"
+        env:
+          SPRING_PROFILES_ACTIVE: prod
+          EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://{{ IP_GATEWAY_1 }}:8761/eureka/,http://{{ IP_GATEWAY_2 }}:8761/eureka/"
+
+    # ----------------------------------------------------
+    # STEP 4: JAVA MICROSERVICES (192.168.1.4, .5, .6)
+    # ----------------------------------------------------
+    - name: Build Java Microservice Locally
+      community.docker.docker_image:
+        name: local/spring-hello-world
+        tag: latest
+        build:
+          path: /src/hello-world
+        source: build 
+
+    - name: Deploy Java Microservices
+      community.docker.docker_container:
+        name: "java-service-{{ item.id }}"
+        image: local/spring-hello-world:latest
+        pull: no
+        state: started
+        restart_policy: always
+        networks:
+          - name: "{{ NETWORK_NAME }}"
+            ipv4_address: "{{ item.ip }}"
+        env:
+          SPRING_PROFILES_ACTIVE: prod
+          EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://{{ IP_GATEWAY_1 }}:8761/eureka/,http://{{ IP_GATEWAY_2 }}:8761/eureka/"
+          SPRING_DATA_REDIS_HOST: "{{ IP_REDIS }}"
+          SPRING_DATA_REDIS_PORT: "6379"
+      loop:
+        - { id: 1, ip: "{{ IP_MICROSERVICE_1 }}" }
+        - { id: 2, ip: "{{ IP_MICROSERVICE_2 }}" }
+        - { id: 3, ip: "{{ IP_MICROSERVICE_3 }}" }
+
+    # ----------------------------------------------------
+    # STEP 5: APACHE WEB SERVER (192.168.1.1)
+    # ----------------------------------------------------
+    - name: Deploy Apache Web Server
+      community.docker.docker_container:
+        name: apache-web-server
+        image: httpd:2.4-alpine
+        state: started
+        restart_policy: always
+        networks:
+          - name: "{{ NETWORK_NAME }}"
+            ipv4_address: "{{ IP_APACHE }}"
+        published_ports:
+          - "80:80"
+          - "443:443"
+
+
+
+
+

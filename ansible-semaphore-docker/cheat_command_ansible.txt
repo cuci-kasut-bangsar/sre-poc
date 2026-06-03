@@ -1,0 +1,126 @@
+
+# to run ansible inside docker
+# map directory for gateway and java service also 
+
+
+docker run --rm -it \
+  -v $(pwd):/ansible \
+  -v $(pwd)/containers/gateway:/src/gateway \
+  -v $(pwd)/containers/hello-world:/src/hello-world \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  willhallonline/ansible:latest /bin/sh
+
+
+# to deploy & undeploy all containers 
+
+ansible-playbook playbooks/deploy-containers.yaml
+ansible-playbook playbooks/undeploy-containers.yaml 
+
+
+# to verify docker running 
+
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# to verify network inside docker 
+
+docker network inspect banking-network | grep -E '"Name":|IPv4Address'
+
+
+# run semaphore (ansible UI) using docker
+# Start the fully-mapped container
+docker run -d \
+  --name ansible-semaphore \
+  -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd):/etc/semaphore/project \
+  -e SEMAPHORE_DB_DIALECT=sqlite \
+  -e SEMAPHORE_ADMIN=admin \
+  -e SEMAPHORE_ADMIN_PASSWORD=admin123 \
+  -e SEMAPHORE_ADMIN_NAME="Admin User" \
+  -e SEMAPHORE_ADMIN_EMAIL="admin@localhost" \
+  semaphoreui/semaphore:latest
+
+
+# Configure Semaphore UI 
+
+Step 2: Configure the Semaphore UI Dashboard
+
+Now, open http://localhost:3000 in your browser, log in, create a project (e.g., "Banking Stack"), and build the mapping components using the UI navigation sidebar:
+1. Key Store (Credentials)
+
+Since our playbook runs completely against localhost using the local Docker engine connection rather than target server SSH keys, we can pass a dummy local key.
+
+    Click Key Store ➔ New Key.
+
+    Name: Local-Connection
+
+    Type: None (or simple password if you ever require a host password, but for our playbook None is fine).
+
+    Click Save.
+
+2. Repositories (The Playbook Source)
+
+We will tell Semaphore to look directly at the local folder we mounted instead of pulling from GitHub.
+
+    Click Repositories ➔ New Repository.
+
+    Name: Local-Playbook-Folder
+
+    URL: /etc/semaphore/project (This points to the exact volume path inside the container)
+
+    Branch: main (You can just type anything here; local storage bypasses strict branch rules).
+
+    Access Key: Local-Connection
+
+    Click Save.
+
+3. Inventories (The Target Group)
+
+Instead of processing an external file, we can write our localhost definition directly.  
+
+    Click Inventory ➔ New Inventory.
+
+    Name: Local-Mac-Docker
+
+    Type: Static YAML
+
+    In the text box, paste the inventory config:
+
+YAML
+
+all:
+  hosts:
+    127.0.0.1:
+      ansible_connection: local
+  vars:
+    NETWORK_NAME: banking-network
+    SUBNET: 192.168.1.0/24
+    IP_APACHE: 192.168.1.1
+    IP_GATEWAY_1: 192.168.1.2
+    IP_GATEWAY_2: 192.168.1.3
+    IP_MICROSERVICE_1: 192.168.1.4
+    IP_MICROSERVICE_2: 192.168.1.5
+    IP_MICROSERVICE_3: 192.168.1.6
+    IP_REDIS: 192.168.1.7
+
+    Click Save.
+
+Step 3: Create the Task Template and Run!
+
+The Task Template ties all these variables together into a clickable execution button.  
+
+    Click Task Templates ➔ New Template.
+
+    Fill out the following parameters exactly:
+
+        Name: Deploy Core Banking Stack
+
+        Playbook Filename: playbooks/deploy-containers.yml (This path is relative to your repository root folder)
+
+        Inventory: Local-Mac-Docker
+
+        Repository: Local-Playbook-Folder
+
+        Environment: None (Since variables are explicitly placed in the inventory).
+
+    Click Save.

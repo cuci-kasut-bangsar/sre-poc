@@ -1,0 +1,21 @@
+---
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Remove Apache, Gateways, Microservices, and Redis containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - apache-web-server
+        - api-gateway-1
+        - api-gateway-2
+        - java-service-1
+        - java-service-2
+        - java-service-3
+        - cache-redis
+
+    - name: Remove the custom banking network
+      community.docker.docker_network:
+        name: banking-network
+        state: absent

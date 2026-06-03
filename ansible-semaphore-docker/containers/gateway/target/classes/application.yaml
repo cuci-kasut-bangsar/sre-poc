@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: gateway
+
+server:
+  port: 8761
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    # Tell this instance NOT to register itself as a client
+    register-with-eureka: false
+    # Tell it not to cache registry information locally
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/

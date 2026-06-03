@@ -37,7 +37,7 @@
         name: local/spring-cloud-gateway
         tag: latest
         build:
-          path: /src/gateway
+          path: /etc/semaphore/project/containers/gateway
         source: build  
 
     - name: Deploy Spring Cloud Gateway 1
@@ -80,7 +80,7 @@
         name: local/spring-hello-world
         tag: latest
         build:
-          path: /src/hello-world
+          path: /etc/semaphore/project/containers/hello-world
         source: build 
 
     - name: Deploy Java Microservices
@@ -92,7 +92,7 @@
         restart_policy: always
         networks:
           - name: "{{ NETWORK_NAME }}"
-            ipv4_address: "{{ item.ip }}"
+            ipv4_address: "{{ item.ip }}"  
         env:
           SPRING_PROFILES_ACTIVE: prod
           EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://{{ IP_GATEWAY_1 }}:8761/eureka/,http://{{ IP_GATEWAY_2 }}:8761/eureka/"
